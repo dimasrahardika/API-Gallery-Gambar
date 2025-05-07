@@ -1,38 +1,57 @@
 const { Sequelize } = require('sequelize');
 require('dotenv').config();
 
-// Better error handling for Vercel deployment
-let sequelize;
+// For Vercel serverless environment
+const isProduction = process.env.NODE_ENV === 'production';
 
-try {
-  sequelize = new Sequelize(
-    process.env.DB_NAME || 'gallery_db',
-    process.env.DB_USER || 'root',
-    process.env.DB_PASSWORD || '',
-    {
-      host: process.env.DB_HOST || 'localhost',
-      dialect: 'mysql',
-      port: process.env.DB_PORT || 3306,
-      logging: false,
-      dialectOptions: {
-        // Additional options for cloud database connections
-        ssl: process.env.DB_SSL === 'true' ? {
-          require: true,
-          rejectUnauthorized: false
-        } : false
+// Create connection options with better defaults for serverless
+const config = {
+  host: process.env.DB_HOST || 'localhost',
+  dialect: 'mysql',
+  port: process.env.DB_PORT || 3306,
+  logging: isProduction ? false : console.log,
+  pool: {
+    max: isProduction ? 2 : 10, // Lower connection pool in serverless
+    min: 0,
+    acquire: 30000,
+    idle: 10000
+  },
+  dialectOptions: {
+    // Enable SSL for production database connections
+    ssl: process.env.DB_SSL === 'true' ? {
+      require: true,
+      rejectUnauthorized: false
+    } : false
+  }
+};
+
+// Create a function to get a Sequelize instance - allows better handling in serverless
+const getConnection = () => {
+  try {
+    return new Sequelize(
+      process.env.DB_NAME || 'gallery_db',
+      process.env.DB_USER || 'root',
+      process.env.DB_PASSWORD || '',
+      config
+    );
+  } catch (error) {
+    console.error('Failed to initialize database connection:', error);
+    // Return a dummy sequelize that won't crash but will report errors
+    return {
+      authenticate: async () => {
+        throw new Error('Database connection was not initialized properly');
       },
-      // Connection pool settings for serverless environment
-      pool: {
-        max: 2,
-        min: 0,
-        idle: 10000
-      }
-    }
-  );
-  
-  console.log(`Database connection initialized to: ${process.env.DB_HOST || 'localhost'}`);
-} catch (error) {
-  console.error('Failed to initialize database connection:', error);
-}
+      define: () => ({
+        sync: async () => {}
+      }),
+      sync: async () => {},
+      model: () => {},
+      models: {}
+    };
+  }
+};
+
+// Create and export the connection
+const sequelize = getConnection();
 
 module.exports = sequelize;
