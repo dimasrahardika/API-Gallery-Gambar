@@ -9,11 +9,15 @@
     {
       "src": "*.html",
       "use": "@vercel/static"
+    },
+    {
+      "src": "uploads/**/*",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
     {
-      "src": "/api/v1/(.*)",
+      "src": "/api/(.*)",
       "dest": "src/server.js"
     },
     {
@@ -25,12 +29,16 @@
       "dest": "/uploads/thumbnails/$1"
     },
     {
-      "src": "/(.*)\\.html",
+      "src": "/(login|register|upload-form|view-images)",
       "dest": "/$1.html"
     },
     {
       "src": "/",
       "dest": "/view-images.html"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "src/server.js"
     }
   ],
   "env": {
