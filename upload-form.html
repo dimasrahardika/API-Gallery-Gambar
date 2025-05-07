@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Gambar</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"], textarea, input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        textarea {
+            height: 100px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .preview {
+            margin-top: 20px;
+            text-align: center;
+        }
+        .preview img {
+            max-width: 100%;
+            max-height: 300px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .error, .success {
+            padding: 10px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .tags-input {
+            display: flex;
+            flex-wrap: wrap;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 5px;
+            margin-top: 5px;
+            background-color: white;
+        }
+        .tags-input .tag {
+            display: flex;
+            align-items: center;
+            padding: 5px;
+            background: #eef;
+            border-radius: 3px;
+            margin-right: 5px;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+        .tags-input .tag .close {
+            margin-left: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            color: #777;
+        }
+        .tags-input input {
+            border: none;
+            outline: none;
+            flex-grow: 1;
+            padding: 5px;
+            font-size: 14px;
+        }
+        .navigation {
+            text-align: center;
+            margin-top: 20px;
+        }
+        .navigation a {
+            color: #4CAF50;
+            text-decoration: none;
+            margin: 0 10px;
+        }
+        .navigation a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <h1>Upload Gambar</h1>
+    
+    <div id="authAlert" class="error" style="display: none;">
+        Anda harus login untuk mengunggah gambar.
+        <a href="login.html">Klik di sini untuk login</a>
+    </div>
+    
+    <div id="errorMessage" class="error" style="display: none;"></div>
+    <div id="successMessage" class="success" style="display: none;"></div>
+    
+    <form id="uploadForm" style="display: none;">
+        <div class="form-group">
+            <label for="title">Judul:</label>
+            <input type="text" id="title" name="title" required>
+        </div>
+
+        <div class="form-group">
+            <label for="description">Deskripsi:</label>
+            <textarea id="description" name="description"></textarea>
+        </div>
+
+        <div class="form-group">
+            <label for="tags">Tags (tekan Enter untuk menambah tag):</label>
+            <div class="tags-input">
+                <input id="tagsInput" type="text" placeholder="Tambahkan tag...">
+            </div>
+            <input type="hidden" id="tags" name="tags">
+        </div>
+
+        <div class="form-group">
+            <label for="image">Gambar:</label>
+            <input type="file" id="image" name="image" accept="image/*" required>
+        </div>
+
+        <div class="preview" id="imagePreview" style="display: none;">
+            <h3>Preview:</h3>
+            <img id="previewImage" src="#" alt="Preview">
+        </div>
+
+        <button type="submit">Upload</button>
+    </form>
+    
+    <div class="navigation">
+        <a href="view-images.html">Lihat Galeri Gambar</a>
+    </div>
+
+    <script>
+        // Cek autentikasi
+        function checkAuth() {
+            const token = localStorage.getItem('token');
+            
+            if (!token) {
+                document.getElementById('authAlert').style.display = 'block';
+                document.getElementById('uploadForm').style.display = 'none';
+                return false;
+            } else {
+                document.getElementById('authAlert').style.display = 'none';
+                document.getElementById('uploadForm').style.display = 'block';
+                return true;
+            }
+        }
+        
+        // Panggil fungsi cek autentikasi saat halaman dimuat
+        checkAuth();
+        
+        // Pengelolaan tags dengan UI yang lebih baik
+        let tags = [];
+        const tagsInput = document.querySelector('.tags-input');
+        const input = tagsInput.querySelector('input');
+        const hiddenTagsInput = document.getElementById('tags');
+        
+        // Function untuk me-render tags
+        function renderTags() {
+            // Hapus semua tag yang ada saat ini
+            document.querySelectorAll('.tags-input .tag').forEach(tag => {
+                tagsInput.removeChild(tag);
+            });
+            
+            // Tambahkan tag yang ada
+            tags.forEach((tagText, index) => {
+                const tag = document.createElement('div');
+                tag.className = 'tag';
+                tag.innerHTML = `
+                    ${tagText}
+                    <span class="close" data-index="${index}">&times;</span>
+                `;
+                tagsInput.insertBefore(tag, input);
+            });
+            
+            // Update nilai hidden input
+            hiddenTagsInput.value = JSON.stringify(tags);
+        }
+        
+        // Event listener untuk menambah tag baru
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && input.value.trim() !== '') {
+                e.preventDefault();
+                
+                const tag = input.value.trim();
+                if (tags.indexOf(tag) === -1) { // Cek duplikat
+                    tags.push(tag);
+                    renderTags();
+                    input.value = '';
+                }
+            }
+        });
+        
+        // Event listener untuk menghapus tag
+        tagsInput.addEventListener('click', function(e) {
+            if (e.target.classList.contains('close')) {
+                const index = parseInt(e.target.getAttribute('data-index'));
+                tags.splice(index, 1);
+                renderTags();
+            }
+        });
+        
+        // Image Preview
+        const imageInput = document.getElementById('image');
+        const previewDiv = document.getElementById('imagePreview');
+        const previewImage = document.getElementById('previewImage');
+        
+        imageInput.addEventListener('change', function() {
+            const file = this.files[0];
+            
+            if (file) {
+                const reader = new FileReader();
+                
+                reader.addEventListener('load', function() {
+                    previewImage.src = this.result;
+                    previewDiv.style.display = 'block';
+                });
+                
+                reader.readAsDataURL(file);
+            } else {
+                previewDiv.style.display = 'none';
+            }
+        });
+        
+        // Form submission with JWT Auth
+        const uploadForm = document.getElementById('uploadForm');
+        const errorMessage = document.getElementById('errorMessage');
+        const successMessage = document.getElementById('successMessage');
+        
+        uploadForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            if (!checkAuth()) return;
+            
+            const token = localStorage.getItem('token');
+            const formData = new FormData();
+            
+            // Add text fields
+            formData.append('title', document.getElementById('title').value);
+            formData.append('description', document.getElementById('description').value);
+            
+            // Memastikan tags ditangani dengan benar sebagai array
+            const tagsArray = tags;
+            formData.append('tags', JSON.stringify(tagsArray));
+            
+            // Add the image file
+            const imageFile = document.getElementById('image').files[0];
+            formData.append('image', imageFile);
+            
+            // Show loading
+            successMessage.style.display = 'none';
+            errorMessage.style.display = 'none';
+            
+            try {
+                const response = await fetch('http://localhost:3000/api/v1/images', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || 'Upload gagal');
+                }
+                
+                const data = await response.json();
+                
+                // Display success message
+                successMessage.textContent = 'Gambar berhasil diunggah!';
+                successMessage.style.display = 'block';
+                
+                // Reset form
+                uploadForm.reset();
+                previewDiv.style.display = 'none';
+                tags = [];
+                renderTags();
+                
+            } catch (error) {
+                errorMessage.textContent = error.message;
+                errorMessage.style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>

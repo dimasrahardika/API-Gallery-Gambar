@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lihat Gambar API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #333;
+        }
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .image-card {
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            transition: transform 0.3s;
+        }
+        .image-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .image-container {
+            height: 200px;
+            overflow: hidden;
+        }
+        .image-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            cursor: pointer;
+        }
+        .image-info {
+            padding: 15px;
+        }
+        .image-title {
+            font-weight: bold;
+            font-size: 18px;
+            margin: 0 0 10px 0;
+        }
+        .image-description {
+            color: #666;
+            margin: 0 0 10px 0;
+        }
+        .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 10px;
+        }
+        .tag {
+            background: #eee;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #555;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 100;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.9);
+        }
+        .modal-content {
+            margin: auto;
+            display: block;
+            max-width: 80%;
+            max-height: 80%;
+        }
+        .close {
+            position: absolute;
+            top: 15px;
+            right: 35px;
+            color: #f1f1f1;
+            font-size: 40px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .loading {
+            text-align: center;
+            padding: 30px;
+            font-size: 18px;
+            color: #666;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .user-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 8px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        .button.logout {
+            background-color: #f44336;
+        }
+        .button:hover {
+            opacity: 0.9;
+        }
+        .delete-btn {
+            background-color: #f44336;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            margin-top: 10px;
+            display: none;
+        }
+        .delete-btn:hover {
+            background-color: #d32f2f;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Galeri Gambar API</h1>
+        <div class="user-controls">
+            <div id="userInfo" style="display: none;">
+                <span id="username"></span>
+            </div>
+            <a href="upload-form.html" class="button" id="uploadButton" style="display: none;">Upload Gambar</a>
+            <a href="login.html" class="button" id="loginButton">Login</a>
+            <a href="register.html" class="button" id="registerButton">Register</a>
+            <button class="button logout" id="logoutButton" style="display: none;">Logout</button>
+        </div>
+    </div>
+
+    <div id="gallery" class="gallery">
+        <div class="loading">Memuat gambar...</div>
+    </div>
+
+    <div id="imageModal" class="modal">
+        <span class="close">&times;</span>
+        <img class="modal-content" id="modalImage">
+    </div>
+
+    <script>
+        const apiUrl = 'http://localhost:3000/api/v1/images';
+        const gallery = document.getElementById('gallery');
+        const modal = document.getElementById('imageModal');
+        const modalImg = document.getElementById('modalImage');
+        const closeBtn = document.getElementsByClassName('close')[0];
+        const loginButton = document.getElementById('loginButton');
+        const registerButton = document.getElementById('registerButton');
+        const logoutButton = document.getElementById('logoutButton');
+        const uploadButton = document.getElementById('uploadButton');
+        const userInfo = document.getElementById('userInfo');
+        const usernameSpan = document.getElementById('username');
+
+        // Cek jika user sudah login
+        function checkAuth() {
+            const token = localStorage.getItem('token');
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+
+            if (token) {
+                // User sudah login
+                loginButton.style.display = 'none';
+                registerButton.style.display = 'none';
+                logoutButton.style.display = 'inline-block';
+                uploadButton.style.display = 'inline-block';
+                userInfo.style.display = 'inline-block';
+                usernameSpan.textContent = user.username || 'User';
+                return true;
+            } else {
+                // User belum login
+                loginButton.style.display = 'inline-block';
+                registerButton.style.display = 'inline-block';
+                logoutButton.style.display = 'none';
+                uploadButton.style.display = 'none';
+                userInfo.style.display = 'none';
+                return false;
+            }
+        }
+
+        // Logout function
+        logoutButton.addEventListener('click', function() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            checkAuth();
+            fetchImages(); // Refresh gambar untuk hide delete buttons
+        });
+
+        // Dapatkan semua gambar dari API
+        async function fetchImages() {
+            try {
+                const response = await fetch(apiUrl);
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                const images = await response.json();
+                displayImages(images);
+            } catch (error) {
+                gallery.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+
+        // Hapus gambar
+        async function deleteImage(id) {
+            const token = localStorage.getItem('token');
+            
+            if (!token) {
+                alert('Anda harus login untuk menghapus gambar');
+                return;
+            }
+
+            if (confirm('Apakah Anda yakin ingin menghapus gambar ini?')) {
+                try {
+                    const response = await fetch(`${apiUrl}/${id}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.message || 'Gagal menghapus gambar');
+                    }
+
+                    // Refresh gambar setelah berhasil dihapus
+                    fetchImages();
+                } catch (error) {
+                    alert(`Error: ${error.message}`);
+                }
+            }
+        }
+
+        // Tampilkan gambar dalam galeri
+        function displayImages(images) {
+            if (images.length === 0) {
+                gallery.innerHTML = '<div class="loading">Tidak ada gambar ditemukan.</div>';
+                return;
+            }
+
+            const isLoggedIn = checkAuth();
+            
+            gallery.innerHTML = '';
+            images.forEach(image => {
+                // Use the full URLs provided by the API if available, otherwise construct them
+                const imageUrl = image.fullUrl || `${window.location.origin}${image.url}`;
+                const thumbnailUrl = image.fullThumbnailUrl || `${window.location.origin}${image.thumbnailUrl}`;
+                
+                const imageCard = document.createElement('div');
+                imageCard.className = 'image-card';
+                
+                let tagsHtml = '';
+                // Perbaikan untuk menangani tags yang bukan array atau null/undefined
+                if (image.tags) {
+                    try {
+                        // Jika tags adalah string JSON, parse terlebih dahulu
+                        const tagsArray = typeof image.tags === 'string' ? JSON.parse(image.tags) : image.tags;
+                        
+                        // Periksa apakah sekarang berbentuk array
+                        if (Array.isArray(tagsArray) && tagsArray.length > 0) {
+                            tagsHtml = '<div class="tags">' + 
+                                tagsArray.map(tag => `<span class="tag">${tag}</span>`).join('') +
+                                '</div>';
+                        }
+                    } catch (e) {
+                        console.error('Error parsing tags:', e);
+                    }
+                }
+
+                let deleteButtonHtml = '';
+                if (isLoggedIn) {
+                    deleteButtonHtml = `
+                        <button class="delete-btn" onclick="deleteImage('${image.id}')">
+                            Hapus Gambar
+                        </button>
+                    `;
+                }
+
+                imageCard.innerHTML = `
+                    <div class="image-container">
+                        <img src="${thumbnailUrl}" alt="${image.title}" data-full="${imageUrl}">
+                    </div>
+                    <div class="image-info">
+                        <h3 class="image-title">${image.title}</h3>
+                        <p class="image-description">${image.description || ''}</p>
+                        ${tagsHtml}
+                        ${deleteButtonHtml}
+                    </div>
+                `;
+
+                gallery.appendChild(imageCard);
+                
+                // Tambahkan penangan klik untuk melihat gambar dalam modal
+                const imgElement = imageCard.querySelector('img');
+                imgElement.addEventListener('click', function() {
+                    modalImg.src = this.getAttribute('data-full');
+                    modal.style.display = 'flex';
+                });
+            });
+        }
+
+        // Tutup modal ketika klik tombol close
+        closeBtn.onclick = function() {
+            modal.style.display = 'none';
+        }
+
+        // Tutup modal ketika klik di luar konten modal
+        window.onclick = function(event) {
+            if (event.target == modal) {
+                modal.style.display = 'none';
+            }
+        }
+
+        // Cek autentikasi dan Muat gambar ketika halaman dibuka
+        checkAuth();
+        fetchImages();
+    </script>
+</body>
+</html>
