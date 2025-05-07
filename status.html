@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Status - Galeri Gambar</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1, h2 {
+            text-align: center;
+            color: #333;
+        }
+        .status-container {
+            margin: 30px 0;
+            padding: 20px;
+            border-radius: 8px;
+            background-color: white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        .endpoint {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #eee;
+            border-radius: 4px;
+        }
+        .endpoint-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .endpoint-url {
+            font-family: monospace;
+            background-color: #f5f5f5;
+            padding: 5px;
+            border-radius: 3px;
+        }
+        .status {
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            display: inline-block;
+        }
+        .status.loading {
+            background-color: #f8f9fa;
+            color: #6c757d;
+        }
+        .status.ok {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .response {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .links {
+            text-align: center;
+            margin-top: 30px;
+        }
+        .links a {
+            color: #4CAF50;
+            text-decoration: none;
+            margin: 0 10px;
+        }
+        .links a:hover {
+            text-decoration: underline;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+        .system-info {
+            margin-top: 30px;
+            font-size: 14px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <h1>API Status</h1>
+    <h2>Galeri Gambar</h2>
+    
+    <div class="status-container">
+        <div class="endpoint" id="debug-endpoint">
+            <div class="endpoint-title">
+                <span>API Debug Information</span>
+                <span class="status loading">Checking...</span>
+            </div>
+            <div class="endpoint-url">/api/debug</div>
+            <div class="response">Loading...</div>
+            <button onclick="checkEndpoint('/api/debug', 'debug-endpoint')">Refresh</button>
+        </div>
+        
+        <div class="endpoint" id="env-endpoint">
+            <div class="endpoint-title">
+                <span>Environment Variables Status</span>
+                <span class="status loading">Checking...</span>
+            </div>
+            <div class="endpoint-url">/api/env</div>
+            <div class="response">Loading...</div>
+            <button onclick="checkEndpoint('/api/env', 'env-endpoint')">Refresh</button>
+        </div>
+        
+        <div class="endpoint" id="health-endpoint">
+            <div class="endpoint-title">
+                <span>API Health Check</span>
+                <span class="status loading">Checking...</span>
+            </div>
+            <div class="endpoint-url">/api/health</div>
+            <div class="response">Loading...</div>
+            <button onclick="checkEndpoint('/api/health', 'health-endpoint')">Refresh</button>
+        </div>
+        
+        <div class="endpoint" id="images-endpoint">
+            <div class="endpoint-title">
+                <span>Images API Endpoint</span>
+                <span class="status loading">Checking...</span>
+            </div>
+            <div class="endpoint-url">/api/v1/images</div>
+            <div class="response">Loading...</div>
+            <button onclick="checkEndpoint('/api/v1/images', 'images-endpoint')">Refresh</button>
+        </div>
+    </div>
+    
+    <div class="system-info">
+        <p>Page generated: <span id="current-time"></span></p>
+        <p>Host: <span id="hostname"></span></p>
+    </div>
+    
+    <div class="links">
+        <a href="view-images.html">Gallery</a>
+        <a href="login.html">Login</a>
+        <a href="register.html">Register</a>
+    </div>
+
+    <script>
+        document.getElementById('current-time').textContent = new Date().toLocaleString();
+        document.getElementById('hostname').textContent = window.location.host;
+        
+        async function checkEndpoint(url, elementId) {
+            const container = document.getElementById(elementId);
+            const statusElement = container.querySelector('.status');
+            const responseElement = container.querySelector('.response');
+            
+            statusElement.className = 'status loading';
+            statusElement.textContent = 'Loading...';
+            responseElement.textContent = 'Loading...';
+            
+            try {
+                const response = await fetch(url);
+                let data;
+                
+                try {
+                    data = await response.json();
+                } catch {
+                    data = { text: await response.text() };
+                }
+                
+                if (response.ok) {
+                    statusElement.className = 'status ok';
+                    statusElement.textContent = `OK (${response.status})`;
+                } else {
+                    statusElement.className = 'status error';
+                    statusElement.textContent = `Error (${response.status})`;
+                }
+                
+                responseElement.textContent = JSON.stringify(data, null, 2);
+                
+            } catch (error) {
+                statusElement.className = 'status error';
+                statusElement.textContent = 'Failed';
+                responseElement.textContent = `Connection error: ${error.message}`;
+            }
+        }
+        
+        // Check all endpoints on page load
+        window.addEventListener('load', function() {
+            checkEndpoint('/api/debug', 'debug-endpoint');
+            checkEndpoint('/api/env', 'env-endpoint');
+            checkEndpoint('/api/health', 'health-endpoint');
+            checkEndpoint('/api/v1/images', 'images-endpoint');
+        });
+    </script>
+</body>
+</html>

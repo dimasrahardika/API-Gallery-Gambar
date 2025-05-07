@@ -165,7 +165,10 @@
     </div>
 
     <script>
+        // API URLs with fallback for debugging
         const apiUrl = '/api/v1/images';
+        const debugUrl = '/api/debug';
+        
         const gallery = document.getElementById('gallery');
         const modal = document.getElementById('imageModal');
         const modalImg = document.getElementById('modalImage');
@@ -214,14 +217,44 @@
         async function fetchImages() {
             try {
                 const response = await fetch(apiUrl);
+                
                 if (!response.ok) {
-                    throw new Error('Network response was not ok');
+                    // Try the debug endpoint if main API fails
+                    console.log('Main API failed, trying debug endpoint...');
+                    await checkAPIStatus();
+                    
+                    throw new Error(`API returned status: ${response.status}`);
                 }
+                
                 const images = await response.json();
                 displayImages(images);
             } catch (error) {
-                gallery.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+                gallery.innerHTML = `
+                    <div class="error" style="text-align: center; padding: 20px;">
+                        <h3>Error Loading Images</h3>
+                        <p>${error.message}</p>
+                        <p>The API might be experiencing connection issues with the database.</p>
+                        <button onclick="fetchImages()" style="margin-top: 10px; padding: 5px 15px;">Try Again</button>
+                        <p style="margin-top: 15px; font-size: 14px;">
+                            <a href="/api/debug" target="_blank">Check API Status</a>
+                        </p>
+                    </div>`;
             }
+        }
+        
+        // Check API status for debugging
+        async function checkAPIStatus() {
+            try {
+                const response = await fetch(debugUrl);
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('Debug API status:', data);
+                    return data;
+                }
+            } catch (error) {
+                console.error('Debug API failed too:', error);
+            }
+            return null;
         }
 
         // Hapus gambar

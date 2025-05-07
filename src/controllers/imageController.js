@@ -6,9 +6,21 @@ const fs = require('fs').promises;
 module.exports = {
   getAllImages: async (req, res) => {
     try {
-      const images = await Image.findAll();
+      let images;
       
-
+      try {
+        // Wrap the database query in a try-catch to handle database errors gracefully
+        images = await Image.findAll();
+      } catch (dbError) {
+        console.error('Database error when fetching images:', dbError);
+        return res.status(503).json({ 
+          status: 'error',
+          message: 'Unable to fetch images from database',
+          details: process.env.NODE_ENV === 'production' ? null : dbError.message
+        });
+      }
+      
+      // If we reach here, database query was successful
       const baseUrl = `${req.protocol}://${req.get('host')}`;
       
       const imagesWithFullUrls = images.map(image => {
@@ -22,7 +34,12 @@ module.exports = {
       
       res.json(imagesWithFullUrls);
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      console.error('Error in getAllImages:', error);
+      res.status(500).json({ 
+        status: 'error',
+        message: 'An error occurred while fetching images',
+        details: process.env.NODE_ENV === 'production' ? null : error.message
+      });
     }
   },
 
