@@ -1,29 +1,31 @@
 {
   "name": "api_galerigambar",
   "version": "1.0.0",
+  "description": "API untuk layanan galeri gambar dengan JWT authentication",
   "main": "src/server.js",
-  "directories": {
-    "test": "tests"
+  "engines": {
+    "node": ">=14.0.0"
   },
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "sync-db": "node src/utils/dbSync.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
   "dependencies": {
-    "bcryptjs": "^3.0.2",
+    "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
-    "dotenv": "^16.5.0",
-    "express": "^5.1.0",
-    "jsonwebtoken": "^9.0.2",
-    "multer": "^1.4.5-lts.2",
-    "mysql2": "^3.6.0",
-    "sequelize": "^6.37.7",
-    "sharp": "^0.34.1",
-    "uuid": "^11.1.0"
-  }
+    "dotenv": "^16.0.0",
+    "express": "^4.17.3",
+    "jsonwebtoken": "^9.0.0",
+    "multer": "^1.4.5-lts.1",
+    "mysql2": "^2.3.3",
+    "sequelize": "^6.19.0",
+    "sharp": "^0.30.4",
+    "uuid": "^8.3.2"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.15"
+  },
+  "author": "",
+  "license": "ISC"
 }
