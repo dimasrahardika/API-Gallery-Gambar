@@ -61,7 +61,7 @@ API_GaleriGambar/
 
 1. **Clone repository**:
    ```bash
-   git clone [url-repository]
+   git clone https://github.com/dimasrahardika/API-Gallery-Gambar.git
    cd API_GaleriGambar
    ```
 
