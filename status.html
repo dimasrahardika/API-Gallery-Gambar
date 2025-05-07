@@ -117,6 +117,16 @@
             <button onclick="checkEndpoint('/api/debug', 'debug-endpoint')">Refresh</button>
         </div>
         
+        <div class="endpoint" id="db-status-endpoint">
+            <div class="endpoint-title">
+                <span>Database Connection Status</span>
+                <span class="status loading">Checking...</span>
+            </div>
+            <div class="endpoint-url">/api/db-status</div>
+            <div class="response">Loading...</div>
+            <button onclick="checkEndpoint('/api/db-status', 'db-status-endpoint')">Refresh</button>
+        </div>
+        
         <div class="endpoint" id="env-endpoint">
             <div class="endpoint-title">
                 <span>Environment Variables Status</span>
@@ -151,11 +161,13 @@
     <div class="system-info">
         <p>Page generated: <span id="current-time"></span></p>
         <p>Host: <span id="hostname"></span></p>
+        <div id="mysql2-status"></div>
     </div>
     
     <div class="links">
         <a href="view-images.html">Gallery</a>
         <a href="login.html">Login</a>
+        <a href="login.html?fallback=true">Login Demo</a>
         <a href="register.html">Register</a>
     </div>
 
@@ -192,6 +204,20 @@
                 
                 responseElement.textContent = JSON.stringify(data, null, 2);
                 
+                // Check if this is the debug endpoint and update mysql2 status
+                if (elementId === 'debug-endpoint' && data && data.database) {
+                    const mysql2StatusElement = document.getElementById('mysql2-status');
+                    if (data.database.available) {
+                        mysql2StatusElement.innerHTML = '<p style="color: green;">MySQL2 Status: ✓ Available</p>';
+                    } else {
+                        mysql2StatusElement.innerHTML = `
+                            <p style="color: red;">MySQL2 Status: ✗ Not Available</p>
+                            <p style="color: red;">Error: ${data.database.message}</p>
+                            <p>Fallback mode is active - limited functionality available</p>
+                        `;
+                    }
+                }
+                
             } catch (error) {
                 statusElement.className = 'status error';
                 statusElement.textContent = 'Failed';
@@ -202,6 +228,7 @@
         // Check all endpoints on page load
         window.addEventListener('load', function() {
             checkEndpoint('/api/debug', 'debug-endpoint');
+            checkEndpoint('/api/db-status', 'db-status-endpoint');
             checkEndpoint('/api/env', 'env-endpoint');
             checkEndpoint('/api/health', 'health-endpoint');
             checkEndpoint('/api/v1/images', 'images-endpoint');

@@ -1,54 +1,14 @@
 {
   "version": 2,
-  "name": "api-galeri-gambar",
   "builds": [
-    {
-      "src": "api/index.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "*.html",
-      "use": "@vercel/static"
-    },
-    {
-      "src": "uploads/**/*",
-      "use": "@vercel/static"
-    }
+    { "src": "api/index.js", "use": "@vercel/node" },
+    { "src": "*.html", "use": "@vercel/static" }
   ],
   "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "/api/index.js"
-    },
-    {
-      "src": "/login",
-      "dest": "/login.html"
-    },
-    {
-      "src": "/register",
-      "dest": "/register.html"
-    },
-    {
-      "src": "/upload-form",
-      "dest": "/upload-form.html"
-    },
-    {
-      "src": "/view-images",
-      "dest": "/view-images.html"
-    },
-    {
-      "src": "/images/(.*)",
-      "dest": "/uploads/images/$1"
-    },
-    {
-      "src": "/thumbnails/(.*)",
-      "dest": "/uploads/thumbnails/$1"
-    },
-    {
-      "src": "/",
-      "dest": "/view-images.html"
-    }
+    { "src": "/api/(.*)", "dest": "/api/index.js" },
+    { "src": "/(.*)", "dest": "/$1" }
   ],
+  "installCommand": "npm install mysql2 --save && npm install",
   "env": {
     "NODE_ENV": "production"
   }

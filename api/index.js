@@ -4,15 +4,26 @@ const cors = require('cors');
 const path = require('path');
 const jwt = require('jsonwebtoken');
 
-// Import routes
-const imageRoutes = require('../src/routes/api/v1/imageRoutes');
-const authRoutes = require('../src/routes/api/v1/authRoutes');
-const errorHandler = require('../src/middlewares/errorHandler');
+// ENV configuration
+require('dotenv').config();
+
+// Import JWT secret
 const { JWT_SECRET } = require('../src/middlewares/auth');
 
 // Create a new Express app for serverless environment
-// This ensures we have a fresh instance for each function invocation
 const app = express();
+
+// Check if mysql2 is available
+let dbStatus = { available: true, message: 'OK' };
+try {
+  require('mysql2');
+} catch (error) {
+  console.error('Error loading mysql2:', error.message);
+  dbStatus = { 
+    available: false, 
+    message: 'MySQL2 driver not available. Database functionality will be limited.'
+  };
+}
 
 // Middlewares
 app.use(cors());
@@ -25,7 +36,8 @@ app.get('/api/debug', (req, res) => {
     message: 'Debug endpoint is working',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
-    vercel: process.env.VERCEL === '1' ? 'true' : 'false'
+    vercel: process.env.VERCEL === '1' ? 'true' : 'false',
+    database: dbStatus
   });
 });
 
@@ -37,7 +49,8 @@ app.get('/api/env', (req, res) => {
     dbName: process.env.DB_NAME ? '✓ set' : '✗ not set',
     dbUser: process.env.DB_USER ? '✓ set' : '✗ not set',
     dbPass: process.env.DB_PASSWORD ? '✓ set' : '✗ not set',
-    jwtSecret: process.env.JWT_SECRET ? '✓ set' : '✗ not set'
+    jwtSecret: process.env.JWT_SECRET ? '✓ set' : '✗ not set',
+    mysql2: dbStatus.available ? '✓ available' : '✗ not available'
   });
 });
 
@@ -57,13 +70,53 @@ app.post('/api/auth-debug', (req, res) => {
         contentType: req.headers['content-type'],
         method: req.method,
         path: req.path,
-        jwt_configured: JWT_SECRET ? '✓ configured' : '✗ using default'
+        jwt_configured: JWT_SECRET ? '✓ configured' : '✗ using default',
+        database: dbStatus
       }
     });
   } catch (error) {
     res.status(500).json({
       status: 'error',
       message: 'Debug endpoint error',
+      error: error.message
+    });
+  }
+});
+
+// Database connection status endpoint
+app.get('/api/db-status', async (req, res) => {
+  try {
+    if (!dbStatus.available) {
+      return res.status(503).json({
+        status: 'error',
+        message: 'Database driver not available',
+        details: dbStatus.message,
+        solution: 'Ensure mysql2 is properly installed'
+      });
+    }
+
+    // Try to connect to database
+    const db = require('../src/config/database');
+    try {
+      await db.authenticate();
+      
+      return res.status(200).json({
+        status: 'success',
+        message: 'Database connection successful',
+        timestamp: new Date().toISOString()
+      });
+    } catch (dbError) {
+      return res.status(503).json({
+        status: 'error', 
+        message: 'Database connection failed',
+        error: dbError.message,
+        solution: 'Check your database credentials and ensure the database server is accessible'
+      });
+    }
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      message: 'Error checking database status',
       error: error.message
     });
   }
@@ -138,16 +191,79 @@ app.post('/api/v1/auth/fallback-login', (req, res) => {
   }
 });
 
-// API routes - specific routes first
-app.use('/api/v1/images', imageRoutes);
-app.use('/api/v1/auth', authRoutes);
+// Load routes conditionally based on mysql2 availability
+if (dbStatus.available) {
+  try {
+    // Try to load the routes normally
+    const imageRoutes = require('../src/routes/api/v1/imageRoutes');
+    const authRoutes = require('../src/routes/api/v1/authRoutes');
+    const errorHandler = require('../src/middlewares/errorHandler');
 
-// General error handling
-app.use(errorHandler);
+    // API routes - specific routes first
+    app.use('/api/v1/images', imageRoutes);
+    app.use('/api/v1/auth', authRoutes);
+
+    // General error handling
+    app.use(errorHandler);
+  } catch (error) {
+    console.error('Error loading routes:', error);
+    // Set up fallback routes
+    app.use('/api/v1/images', (req, res) => {
+      res.status(503).json({
+        status: 'error',
+        message: 'Image API temporarily unavailable due to database issues',
+        error: error.message
+      });
+    });
+
+    app.use('/api/v1/auth', (req, res) => {
+      if (req.path === '/login' && req.method === 'POST') {
+        // Redirect to fallback login
+        return app._router.handle(req, res);
+      }
+      
+      res.status(503).json({
+        status: 'error',
+        message: 'Auth API temporarily unavailable due to database issues',
+        error: error.message
+      });
+    });
+  }
+} else {
+  // Set up fallback routes when database is not available
+  app.use('/api/v1/images', (req, res) => {
+    res.status(503).json({
+      status: 'error',
+      message: 'Image API unavailable - MySQL2 driver not installed',
+      solution: 'Please contact the administrator to fix the database configuration'
+    });
+  });
+
+  // Auth routes still work through fallback
+  app.use('/api/v1/auth/login', (req, res, next) => {
+    // Redirect to fallback login handler
+    req.url = '/api/v1/auth/fallback-login';
+    app._router.handle(req, res, next);
+  });
+
+  app.use('/api/v1/auth', (req, res) => {
+    if (req.path !== '/login') {
+      res.status(503).json({
+        status: 'error',
+        message: 'Auth API unavailable - MySQL2 driver not installed',
+        solution: 'Please contact the administrator to fix the database configuration'
+      });
+    }
+  });
+}
 
 // Add a healthcheck endpoint
 app.get('/api/health', (req, res) => {
-  res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+  res.status(200).json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    database: dbStatus
+  });
 });
 
 // Fallback 404 handler
