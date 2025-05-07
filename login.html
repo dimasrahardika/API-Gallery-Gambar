@@ -91,8 +91,42 @@
     <script>
         // Use relative path for API URL to work in any environment
         const apiUrl = '/api/v1/auth/login';
+        const fallbackApiUrl = '/api/v1/auth/fallback-login';
+        const debugApiUrl = '/api/auth-debug';
         const form = document.getElementById('loginForm');
         const errorMessage = document.getElementById('errorMessage');
+        
+        // Tambahkan parameter debug di URL jika diperlukan
+        const urlParams = new URLSearchParams(window.location.search);
+        const debugMode = urlParams.get('debug') === 'true';
+        const useFallback = urlParams.get('fallback') === 'true';
+        
+        if (debugMode) {
+            // Tambahkan informasi debug di halaman
+            const debugInfo = document.createElement('div');
+            debugInfo.style.margin = '10px 0';
+            debugInfo.style.padding = '10px';
+            debugInfo.style.backgroundColor = '#f8f9fa';
+            debugInfo.style.borderRadius = '4px';
+            debugInfo.innerHTML = '<strong>Debug Mode:</strong> Active';
+            form.parentNode.insertBefore(debugInfo, form);
+        }
+        
+        // Tampilkan notifikasi fallback jika digunakan
+        if (useFallback) {
+            const fallbackInfo = document.createElement('div');
+            fallbackInfo.style.margin = '10px 0';
+            fallbackInfo.style.padding = '10px';
+            fallbackInfo.style.backgroundColor = '#fff3cd';
+            fallbackInfo.style.color = '#856404';
+            fallbackInfo.style.borderRadius = '4px';
+            fallbackInfo.innerHTML = '<strong>Mode Fallback:</strong> Menggunakan kredensial demo: demo@example.com / password123';
+            form.parentNode.insertBefore(fallbackInfo, form);
+            
+            // Pre-fill demo credentials
+            document.getElementById('email').value = 'demo@example.com';
+            document.getElementById('password').value = 'password123';
+        }
         
         form.addEventListener('submit', async function(e) {
             e.preventDefault();
@@ -101,31 +135,110 @@
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
             
+            errorMessage.textContent = ''; // Reset pesan error
+            
+            const payload = { email, password };
+            
             try {
+                // Jika dalam mode debug, test endpoint debug terlebih dahulu
+                if (debugMode) {
+                    const debugResponse = await fetch(debugApiUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    const debugData = await debugResponse.json();
+                    console.log('Debug info:', debugData);
+                    
+                    // Tampilkan informasi debug
+                    const debugDetails = document.createElement('pre');
+                    debugDetails.style.margin = '10px 0';
+                    debugDetails.style.padding = '10px';
+                    debugDetails.style.backgroundColor = '#f8f9fa';
+                    debugDetails.style.borderRadius = '4px';
+                    debugDetails.style.maxHeight = '200px';
+                    debugDetails.style.overflow = 'auto';
+                    debugDetails.textContent = JSON.stringify(debugData, null, 2);
+                    
+                    const existingDetails = document.querySelector('pre');
+                    if (existingDetails) existingDetails.remove();
+                    
+                    errorMessage.parentNode.insertBefore(debugDetails, errorMessage);
+                }
+                
+                // Tentukan URL login berdasarkan parameter
+                const loginUrl = useFallback ? fallbackApiUrl : apiUrl;
+                
                 // Kirim request login ke API
-                const response = await fetch(apiUrl, {
+                console.log('Sending login request to:', loginUrl);
+                let response = await fetch(loginUrl, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ email, password })
+                    body: JSON.stringify(payload)
                 });
                 
+                // Jika login normal gagal, coba fallback login secara otomatis
+                if (!response.ok && !useFallback) {
+                    console.log('Main login failed, trying fallback login...');
+                    response = await fetch(fallbackApiUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(payload)
+                    });
+                }
+                
                 const data = await response.json();
+                console.log('Login response status:', response.status);
                 
                 if (!response.ok) {
                     throw new Error(data.message || 'Login gagal');
                 }
+                
+                // Tampilkan pesan sukses sebelum redirect
+                errorMessage.style.color = 'green';
+                errorMessage.textContent = 'Login berhasil! Redirecting...';
                 
                 // Simpan token ke localStorage
                 localStorage.setItem('token', data.token);
                 localStorage.setItem('user', JSON.stringify(data.data.user));
                 
                 // Redirect ke halaman galeri
-                window.location.href = 'view-images.html';
+                setTimeout(() => {
+                    window.location.href = 'view-images.html';
+                }, 1000);
                 
             } catch (error) {
-                errorMessage.textContent = error.message;
+                errorMessage.style.color = 'red';
+                errorMessage.textContent = error.message || 'Terjadi kesalahan saat login';
+                
+                // Tambahkan link untuk mode debug & fallback jika diperlukan
+                if (!debugMode || !useFallback) {
+                    const links = document.createElement('div');
+                    links.style.marginTop = '10px';
+                    
+                    if (!debugMode) {
+                        links.innerHTML += '<p><a href="?debug=true">Aktifkan mode debug</a></p>';
+                    }
+                    
+                    if (!useFallback) {
+                        links.innerHTML += '<p><a href="?fallback=true">Gunakan login demo</a></p>';
+                    }
+                    
+                    if (debugMode && !useFallback) {
+                        links.innerHTML += '<p><a href="?debug=true&fallback=true">Gunakan login demo dengan debug</a></p>';
+                    }
+                    
+                    errorMessage.appendChild(links);
+                }
+                
+                console.error('Login error:', error);
             }
         });
     </script>

@@ -1,4 +1,3 @@
-
 const User = require('../models/user');
 const { generateToken } = require('../middlewares/auth');
 
@@ -47,33 +46,42 @@ exports.register = async (req, res) => {
 
 exports.login = async (req, res) => {
   try {
+    console.log('Login attempt:', req.body.email);
     const { email, password } = req.body;
 
     if (!email || !password) {
+      console.log('Login failed: Missing email or password');
       return res.status(400).json({
         status: 'error',
         message: 'Mohon berikan email dan password'
       });
     }
 
+    console.log('Searching for user with email:', email);
+    
     const user = await User.findOne({ where: { email } });
     if (!user) {
+      console.log('Login failed: User not found', email);
       return res.status(401).json({
         status: 'error',
         message: 'Email atau password salah'
       });
     }
 
+    console.log('User found, verifying password');
     const isPasswordValid = await user.comparePassword(password);
     if (!isPasswordValid) {
+      console.log('Login failed: Invalid password for', email);
       return res.status(401).json({
         status: 'error',
         message: 'Email atau password salah'
       });
     }
 
+    console.log('Password valid, generating token for user:', user.id);
     const token = generateToken(user);
 
+    console.log('Login successful for:', email);
     res.status(200).json({
       status: 'success',
       token,
@@ -87,9 +95,11 @@ exports.login = async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('Login error:', error);
     res.status(400).json({
       status: 'error',
-      message: error.message
+      message: error.message,
+      stack: process.env.NODE_ENV === 'production' ? null : error.stack
     });
   }
 };

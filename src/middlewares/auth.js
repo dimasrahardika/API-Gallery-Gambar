@@ -1,29 +1,36 @@
-
 const jwt = require('jsonwebtoken');
 const User = require('../models/user');
 
-
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-should-be-in-env';
+// Menggunakan secret key yang lebih kuat sebagai default
+const JWT_SECRET = process.env.JWT_SECRET || 'api-gallery-gambar-rahasiaJWT-verySecretKey2024!';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
 
-
 const generateToken = (user) => {
-  return jwt.sign(
-    { 
-      id: user.id, 
-      username: user.username,
-      role: user.role 
-    }, 
-    JWT_SECRET, 
-    { expiresIn: JWT_EXPIRES_IN }
-  );
+  try {
+    console.log('Generating token for user:', user.id);
+    const token = jwt.sign(
+      { 
+        id: user.id, 
+        username: user.username,
+        role: user.role 
+      }, 
+      JWT_SECRET, 
+      { expiresIn: JWT_EXPIRES_IN }
+    );
+    
+    // Verifikasi token valid sebelum mengembalikannya
+    jwt.verify(token, JWT_SECRET);
+    console.log('Token generated successfully');
+    return token;
+  } catch (error) {
+    console.error('Error generating token:', error);
+    throw new Error('Gagal membuat token autentikasi: ' + error.message);
+  }
 };
-
 
 const protect = async (req, res, next) => {
   try {
     let token;
-    
     
     if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
       token = req.headers.authorization.split(' ')[1];
@@ -33,7 +40,6 @@ const protect = async (req, res, next) => {
       token = req.cookies.jwt;
     }
     
-    
     if (!token) {
       return res.status(401).json({
         status: 'error',
@@ -41,29 +47,37 @@ const protect = async (req, res, next) => {
       });
     }
     
-    
-    const decoded = jwt.verify(token, JWT_SECRET);
-    
-    
-    const currentUser = await User.findByPk(decoded.id);
-    if (!currentUser) {
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      console.log('Token verified successfully for user ID:', decoded.id);
+      
+      const currentUser = await User.findByPk(decoded.id);
+      if (!currentUser) {
+        return res.status(401).json({
+          status: 'error',
+          message: 'User dengan token ini tidak lagi ada.'
+        });
+      }
+      
+      req.user = currentUser;
+      next();
+    } catch (jwtError) {
+      console.error('JWT verification error:', jwtError);
       return res.status(401).json({
         status: 'error',
-        message: 'User dengan token ini tidak lagi ada.'
+        message: 'Token tidak valid atau telah kedaluwarsa.',
+        details: process.env.NODE_ENV === 'production' ? null : jwtError.message
       });
     }
-    
-    
-    req.user = currentUser;
-    next();
   } catch (error) {
-    return res.status(401).json({
+    console.error('Auth middleware error:', error);
+    return res.status(500).json({
       status: 'error',
-      message: 'Token tidak valid atau telah kedaluwarsa.'
+      message: 'Terjadi kesalahan saat memeriksa otentikasi',
+      details: process.env.NODE_ENV === 'production' ? null : error.message
     });
   }
 };
-
 
 const restrictTo = (...roles) => {
   return (req, res, next) => {
