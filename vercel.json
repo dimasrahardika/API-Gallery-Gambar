@@ -3,7 +3,7 @@
   "name": "api-galeri-gambar",
   "builds": [
     {
-      "src": "src/server.js",
+      "src": "api/index.js",
       "use": "@vercel/node"
     },
     {
@@ -17,8 +17,8 @@
   ],
   "routes": [
     {
-      "src": "/api/(.*)",
-      "dest": "src/server.js"
+      "src": "/api/v1/(.*)",
+      "dest": "/api/index.js"
     },
     {
       "src": "/images/(.*)",
@@ -38,7 +38,7 @@
     },
     {
       "src": "/(.*)",
-      "dest": "src/server.js"
+      "dest": "/api/index.js"
     }
   ],
   "env": {
