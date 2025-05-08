@@ -6,6 +6,7 @@
     { "src": "uploads/**", "use": "@vercel/static" }
   ],
   "routes": [
+    { "src": "^/$", "dest": "/index.html" },
     { "src": "/api/(.*)", "dest": "api/index.js" },
     { "src": "/uploads/(.*)", "dest": "/uploads/$1" },
     { "src": "/(.*\\.(js|css|jpg|jpeg|png|gif|ico|html))", "dest": "/$1" },
