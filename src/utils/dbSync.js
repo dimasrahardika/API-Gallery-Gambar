@@ -8,9 +8,10 @@ async function syncDB() {
     await sequelize.authenticate();
     console.log('Koneksi database berhasil ke', process.env.DB_HOST);
     
-
-    await sequelize.sync({ force: true });
-    console.log('Database berhasil disinkronkan! Tabel telah dibuat.');
+    // Using alter:true instead of force:true to prevent data loss
+    // This will modify existing tables to match the models
+    await sequelize.sync({ alter: true });
+    console.log('Database berhasil disinkronkan! Tabel telah diperbarui.');
     
     // Cek model definitions
     console.log('Model Image table name:', Image.tableName);

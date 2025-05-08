@@ -22,14 +22,6 @@ const Image = sequelize.define('Image', {
     type: DataTypes.STRING,
     allowNull: true
   },
-  cloudinary_id: {
-    type: DataTypes.STRING,
-    allowNull: true
-  },
-  publicId: {
-    type: DataTypes.STRING,
-    allowNull: true
-  },
   tags: {
     type: DataTypes.JSON,
     allowNull: true,
@@ -46,14 +38,6 @@ const Image = sequelize.define('Image', {
   height: {
     type: DataTypes.INTEGER,
     allowNull: true
-  },
-  userId: {
-    type: DataTypes.INTEGER,
-    allowNull: true,
-    references: {
-      model: 'Users',
-      key: 'id'
-    }
   }
 }, {
   timestamps: true
