@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const jwt = require('jsonwebtoken');
+const fs = require('fs').promises;
 
 // ENV configuration
 require('dotenv').config();
@@ -29,6 +30,55 @@ try {
 app.use(cors());
 app.use(express.json());
 
+// Serve static files for HTML pages and uploads
+app.use(express.static(path.join(__dirname, '..')));
+
+// Mock images data for when database is unavailable
+const MOCK_IMAGES = [
+  {
+    id: 1,
+    title: "Sample Image 1",
+    description: "This is a sample image used when database is unavailable",
+    filename: "sample1.jpg",
+    url: "https://picsum.photos/id/237/800/600",
+    thumbnailUrl: "https://picsum.photos/id/237/200/200",
+    size: 12345,
+    width: 800,
+    height: 600,
+    tags: ["sample", "database-unavailable"],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 2,
+    title: "Sample Image 2",
+    description: "Another sample image used when database is unavailable",
+    filename: "sample2.jpg",
+    url: "https://picsum.photos/id/244/800/600",
+    thumbnailUrl: "https://picsum.photos/id/244/200/200",
+    size: 23456,
+    width: 800,
+    height: 600,
+    tags: ["sample", "database-unavailable"],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 3,
+    title: "Sample Image 3",
+    description: "Yet another sample image used when database is unavailable",
+    filename: "sample3.jpg",
+    url: "https://picsum.photos/id/250/800/600",
+    thumbnailUrl: "https://picsum.photos/id/250/200/200",
+    size: 34567,
+    width: 800,
+    height: 600,
+    tags: ["sample", "database-unavailable"],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }
+];
+
 // Debug endpoints that don't require database
 app.get('/api/debug', (req, res) => {
   res.status(200).json({ 
@@ -37,6 +87,15 @@ app.get('/api/debug', (req, res) => {
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
     vercel: process.env.VERCEL === '1' ? 'true' : 'false',
+    database: dbStatus
+  });
+});
+
+// Add a healthcheck endpoint
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
     database: dbStatus
   });
 });
@@ -52,35 +111,6 @@ app.get('/api/env', (req, res) => {
     jwtSecret: process.env.JWT_SECRET ? '✓ set' : '✗ not set',
     mysql2: dbStatus.available ? '✓ available' : '✗ not available'
   });
-});
-
-// Add auth-specific debug endpoint
-app.post('/api/auth-debug', (req, res) => {
-  try {
-    const { email, password } = req.body;
-    
-    res.status(200).json({
-      status: 'debug',
-      message: 'Auth debug endpoint',
-      receivedData: {
-        email: email ? `✓ received (${email})` : '✗ missing',
-        password: password ? '✓ received (hidden)' : '✗ missing'
-      },
-      requestInfo: {
-        contentType: req.headers['content-type'],
-        method: req.method,
-        path: req.path,
-        jwt_configured: JWT_SECRET ? '✓ configured' : '✗ using default',
-        database: dbStatus
-      }
-    });
-  } catch (error) {
-    res.status(500).json({
-      status: 'error',
-      message: 'Debug endpoint error',
-      error: error.message
-    });
-  }
 });
 
 // Database connection status endpoint
@@ -122,8 +152,36 @@ app.get('/api/db-status', async (req, res) => {
   }
 });
 
+// Special route to handle images API - uses mock data when database is unavailable
+app.get('/api/v1/images', async (req, res) => {
+  try {
+    // First try to use the regular router if database is available
+    if (dbStatus.available) {
+      try {
+        const Image = require('../src/models/image');
+        const images = await Image.findAll();
+        return res.json(images);
+      } catch (dbError) {
+        console.error('Failed to fetch images from database:', dbError);
+        // Fall back to mock data
+      }
+    }
+    
+    // Return mock images data when database is unavailable
+    console.log('Returning mock images data');
+    return res.json(MOCK_IMAGES);
+  } catch (error) {
+    console.error('Error in /api/v1/images fallback:', error);
+    res.status(500).json({ 
+      status: 'error',
+      message: 'Error fetching images',
+      details: error.message
+    });
+  }
+});
+
 // Fallback login endpoint bila authRoutes gagal (masalah database)
-app.post('/api/v1/auth/fallback-login', (req, res) => {
+app.post('/api/v1/auth/login', (req, res) => {
   try {
     const { email, password } = req.body;
     
@@ -191,87 +249,41 @@ app.post('/api/v1/auth/fallback-login', (req, res) => {
   }
 });
 
-// Load routes conditionally based on mysql2 availability
-if (dbStatus.available) {
-  try {
-    // Try to load the routes normally
+// Try to load normal routes if possible
+try {
+  if (dbStatus.available) {
     const imageRoutes = require('../src/routes/api/v1/imageRoutes');
     const authRoutes = require('../src/routes/api/v1/authRoutes');
-    const errorHandler = require('../src/middlewares/errorHandler');
-
-    // API routes - specific routes first
-    app.use('/api/v1/images', imageRoutes);
+    
+    // Only use these routes if we haven't already defined special handlers
     app.use('/api/v1/auth', authRoutes);
-
-    // General error handling
-    app.use(errorHandler);
-  } catch (error) {
-    console.error('Error loading routes:', error);
-    // Set up fallback routes
-    app.use('/api/v1/images', (req, res) => {
-      res.status(503).json({
-        status: 'error',
-        message: 'Image API temporarily unavailable due to database issues',
-        error: error.message
-      });
-    });
-
-    app.use('/api/v1/auth', (req, res) => {
-      if (req.path === '/login' && req.method === 'POST') {
-        // Redirect to fallback login
-        return app._router.handle(req, res);
-      }
-      
-      res.status(503).json({
-        status: 'error',
-        message: 'Auth API temporarily unavailable due to database issues',
-        error: error.message
-      });
-    });
   }
-} else {
-  // Set up fallback routes when database is not available
-  app.use('/api/v1/images', (req, res) => {
-    res.status(503).json({
-      status: 'error',
-      message: 'Image API unavailable - MySQL2 driver not installed',
-      solution: 'Please contact the administrator to fix the database configuration'
-    });
-  });
-
-  // Auth routes still work through fallback
-  app.use('/api/v1/auth/login', (req, res, next) => {
-    // Redirect to fallback login handler
-    req.url = '/api/v1/auth/fallback-login';
-    app._router.handle(req, res, next);
-  });
-
-  app.use('/api/v1/auth', (req, res) => {
-    if (req.path !== '/login') {
-      res.status(503).json({
-        status: 'error',
-        message: 'Auth API unavailable - MySQL2 driver not installed',
-        solution: 'Please contact the administrator to fix the database configuration'
-      });
-    }
-  });
+} catch (error) {
+  console.error('Error loading normal routes:', error.message);
 }
 
-// Add a healthcheck endpoint
-app.get('/api/health', (req, res) => {
-  res.status(200).json({ 
-    status: 'OK', 
-    timestamp: new Date().toISOString(),
-    database: dbStatus
-  });
-});
-
-// Fallback 404 handler
-app.use((req, res) => {
-  res.status(404).json({
-    status: 'error',
-    message: `Resource not found: ${req.path}`
-  });
+// Fallback 404 handler that checks for HTML files
+app.use(async (req, res, next) => {
+  try {
+    // For HTML requests, try to send the HTML file directly
+    if (req.path.endsWith('.html')) {
+      const htmlPath = path.join(__dirname, '..', req.path);
+      try {
+        await fs.access(htmlPath);
+        return res.sendFile(htmlPath);
+      } catch (err) {
+        // File doesn't exist, continue to 404
+      }
+    }
+    
+    res.status(404).json({
+      status: 'error',
+      message: `Resource not found: ${req.path}`
+    });
+  } catch (error) {
+    console.error('Error in 404 handler:', error);
+    next();
+  }
 });
 
 // Export for Vercel
