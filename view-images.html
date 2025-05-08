@@ -299,9 +299,28 @@
             
             gallery.innerHTML = '';
             images.forEach(image => {
-                // Use the full URLs provided by the API if available, otherwise construct them
-                const imageUrl = image.fullUrl || `${window.location.origin}${image.url}`;
-                const thumbnailUrl = image.fullThumbnailUrl || `${window.location.origin}${image.thumbnailUrl}`;
+                // Handle different URL formats
+                let imageUrl = image.url;
+                let thumbnailUrl = image.thumbnailUrl;
+                
+                // Make sure the URLs are absolute (start with http:// or https://) or proper relative URLs
+                if (imageUrl && !imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
+                    // This is a relative URL, make sure it starts with /
+                    imageUrl = imageUrl.startsWith('/') ? imageUrl : `/${imageUrl}`;
+                    // Convert from "/images/file.jpg" to "/uploads/images/file.jpg" for local serving
+                    if (imageUrl.startsWith('/images/')) {
+                        imageUrl = imageUrl.replace('/images/', '/uploads/images/');
+                    }
+                }
+                
+                if (thumbnailUrl && !thumbnailUrl.startsWith('http://') && !thumbnailUrl.startsWith('https://')) {
+                    // This is a relative URL, make sure it starts with /
+                    thumbnailUrl = thumbnailUrl.startsWith('/') ? thumbnailUrl : `/${thumbnailUrl}`;
+                    // Convert from "/thumbnails/file.jpg" to "/uploads/thumbnails/file.jpg" for local serving
+                    if (thumbnailUrl.startsWith('/thumbnails/')) {
+                        thumbnailUrl = thumbnailUrl.replace('/thumbnails/', '/uploads/thumbnails/');
+                    }
+                }
                 
                 const imageCard = document.createElement('div');
                 imageCard.className = 'image-card';
@@ -316,7 +335,11 @@
                         // Periksa apakah sekarang berbentuk array
                         if (Array.isArray(tagsArray) && tagsArray.length > 0) {
                             tagsHtml = '<div class="tags">' + 
-                                tagsArray.map(tag => `<span class="tag">${tag}</span>`).join('') +
+                                tagsArray.map(tag => {
+                                    // Remove any extra quotes
+                                    const cleanTag = typeof tag === 'string' ? tag.replace(/^"(.*)"$/, '$1') : tag;
+                                    return `<span class="tag">${cleanTag}</span>`;
+                                }).join('') +
                                 '</div>';
                         }
                     } catch (e) {

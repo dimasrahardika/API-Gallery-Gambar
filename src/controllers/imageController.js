@@ -17,6 +17,21 @@ const ensureDirectoryExists = async (directory) => {
   }
 };
 
+// Normalize image URLs for consistent format
+const normalizeImageUrl = (url) => {
+  if (!url) return null;
+  
+  // Extract filename from URL
+  const filename = path.basename(url);
+  
+  // Create standardized URL format
+  if (url.includes('thumb_')) {
+    return `/thumbnails/${filename}`;
+  } else {
+    return `/images/${filename}`;
+  }
+};
+
 module.exports = {
   getAllImages: async (req, res) => {
     try {
@@ -25,6 +40,14 @@ module.exports = {
       try {
         // Wrap the database query in a try-catch to handle database errors gracefully
         images = await Image.findAll();
+        
+        // Normalize URLs in the response
+        images = images.map(image => {
+          const img = image.toJSON();
+          img.url = normalizeImageUrl(img.url);
+          img.thumbnailUrl = normalizeImageUrl(img.thumbnailUrl);
+          return img;
+        });
       } catch (dbError) {
         console.error('Database error when fetching images:', dbError);
         return res.status(503).json({ 
@@ -51,7 +74,12 @@ module.exports = {
       const image = await Image.findByPk(req.params.id);
       if (!image) return res.status(404).json({ error: 'Image not found' });
       
-      res.json(image);
+      // Normalize URLs
+      const result = image.toJSON();
+      result.url = normalizeImageUrl(result.url);
+      result.thumbnailUrl = normalizeImageUrl(result.thumbnailUrl);
+      
+      res.json(result);
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
@@ -112,10 +140,9 @@ module.exports = {
       // Get image dimensions
       const metadata = await sharp(imageBuffer).metadata();
       
-      // Build URLs (relative to server root)
-      const baseUrl = process.env.BASE_URL || `http://${req.headers.host}`;
-      const imageUrl = `${baseUrl}/uploads/images/${uniqueFilename}`;
-      const thumbnailUrl = `${baseUrl}/uploads/thumbnails/${thumbnailFilename}`;
+      // Use consistent URL format (/images/filename.jpg)
+      const imageUrl = `/images/${uniqueFilename}`;
+      const thumbnailUrl = `/thumbnails/${thumbnailFilename}`;
       
       // Save to database
       const imageData = {
