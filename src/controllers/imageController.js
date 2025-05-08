@@ -1,7 +1,21 @@
 const Image = require('../models/image');
 const fs = require('fs').promises;
-const cloudinary = require('../config/cloudinary');
 const path = require('path');
+const { v4: uuidv4 } = require('uuid');
+const sharp = require('sharp');
+
+// Define image storage paths
+const IMAGES_DIR = path.join(process.cwd(), 'uploads', 'images');
+const THUMBNAILS_DIR = path.join(process.cwd(), 'uploads', 'thumbnails');
+
+// Ensure directories exist
+const ensureDirectoryExists = async (directory) => {
+  try {
+    await fs.access(directory);
+  } catch (error) {
+    await fs.mkdir(directory, { recursive: true });
+  }
+};
 
 module.exports = {
   getAllImages: async (req, res) => {
@@ -65,83 +79,78 @@ module.exports = {
         }
       }
       
-      // Upload file to Cloudinary
-      let cloudinaryUpload;
-      try {
-        // Handle both path-based files and memory-stored files
-        // If file.path exists and doesn't start with data:, use it directly
-        // Otherwise, if buffer exists, create a data URI
-        let uploadSource;
-        if (file.path && !file.path.startsWith('data:')) {
-          uploadSource = file.path;
-        } else if (file.buffer) {
-          // Create a data URI from the buffer
-          const fileFormat = file.mimetype.split('/')[1];
-          uploadSource = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
-        }
-        
-        cloudinaryUpload = await cloudinary.uploader.upload(uploadSource, {
-          folder: "gallery_images",
-          resource_type: "auto"
-        });
-        
-        console.log('Cloudinary upload successful:', cloudinaryUpload.secure_url);
-        
-        // Generate thumbnail using Cloudinary transformation
-        const thumbnailUrl = cloudinary.url(cloudinaryUpload.public_id, {
-          width: 200,
-          height: 200,
-          crop: 'fill',
-          format: 'jpg',
-          quality: 80
-        });
-        
-        // Save to database
-        const imageData = {
-          title,
-          description,
-          filename: file.originalname || path.basename(file.path || 'unknown'),
-          url: cloudinaryUpload.secure_url,
-          thumbnailUrl: thumbnailUrl,
-          cloudinary_id: cloudinaryUpload.asset_id,
-          publicId: cloudinaryUpload.public_id,
-          tags: parsedTags,
-          size: cloudinaryUpload.bytes,
-          width: cloudinaryUpload.width,
-          height: cloudinaryUpload.height
-        };
+      // Ensure directories exist
+      await Promise.all([
+        ensureDirectoryExists(IMAGES_DIR),
+        ensureDirectoryExists(THUMBNAILS_DIR)
+      ]);
 
-        const image = await Image.create(imageData);
-        
-        // Delete temporary file after uploading to cloudinary (if it exists)
-        if (file && file.path && !file.path.startsWith('data:')) {
-          try {
-            await fs.unlink(file.path);
-            console.log(`Temporary file ${file.path} deleted successfully`);
-          } catch (unlinkErr) {
-            console.error('Error deleting temporary file:', unlinkErr);
-            // Don't block the process if temporary file deletion fails
-          }
-        }
-        
-        res.status(201).json({
-          id: image.id,
-          url: image.url,
-          thumbnailUrl: image.thumbnailUrl
-        });
-      } catch (cloudError) {
-        console.error("Cloudinary upload error:", cloudError);
-        return res.status(500).json({ 
-          status: 'error',
-          type: 'UPLOAD_ERROR',
-          message: 'Failed to upload image to cloud storage',
-          details: process.env.NODE_ENV === 'production' ? null : cloudError.message
-        });
+      // Generate unique filename
+      const fileExtension = path.extname(file.originalname);
+      const uniqueFilename = `${uuidv4()}${fileExtension}`;
+      const imageFilePath = path.join(IMAGES_DIR, uniqueFilename);
+      const thumbnailFilename = `thumb_${uniqueFilename}`;
+      const thumbnailFilePath = path.join(THUMBNAILS_DIR, thumbnailFilename);
+      
+      // Get source data for image processing
+      let imageBuffer;
+      if (file.buffer) {
+        imageBuffer = file.buffer;
+      } else if (file.path) {
+        imageBuffer = await fs.readFile(file.path);
       }
+      
+      // Process and save the original image
+      await fs.writeFile(imageFilePath, imageBuffer);
+      
+      // Generate thumbnail
+      await sharp(imageBuffer)
+        .resize(200, 200, { fit: 'cover' })
+        .jpeg({ quality: 80 })
+        .toFile(thumbnailFilePath);
+      
+      // Get image dimensions
+      const metadata = await sharp(imageBuffer).metadata();
+      
+      // Build URLs (relative to server root)
+      const baseUrl = process.env.BASE_URL || `http://${req.headers.host}`;
+      const imageUrl = `${baseUrl}/uploads/images/${uniqueFilename}`;
+      const thumbnailUrl = `${baseUrl}/uploads/thumbnails/${thumbnailFilename}`;
+      
+      // Save to database
+      const imageData = {
+        title,
+        description,
+        filename: uniqueFilename,
+        url: imageUrl,
+        thumbnailUrl: thumbnailUrl,
+        size: file.size,
+        width: metadata.width,
+        height: metadata.height,
+        tags: parsedTags
+      };
+
+      const image = await Image.create(imageData);
+      
+      // Delete temporary file if it exists
+      if (file && file.path) {
+        try {
+          await fs.unlink(file.path);
+          console.log(`Temporary file ${file.path} deleted successfully`);
+        } catch (unlinkErr) {
+          console.error('Error deleting temporary file:', unlinkErr);
+        }
+      }
+      
+      res.status(201).json({
+        id: image.id,
+        url: image.url,
+        thumbnailUrl: image.thumbnailUrl
+      });
     } catch (error) {
       console.error("Upload error:", error);
       // Clean up temporary file in case of error
-      if (req.file && req.file.path && !req.file.path.startsWith('data:')) {
+      if (req.file && req.file.path) {
         try {
           await fs.unlink(req.file.path);
         } catch (unlinkErr) {
@@ -161,18 +170,20 @@ module.exports = {
       const image = await Image.findByPk(req.params.id);
       if (!image) return res.status(404).json({ error: 'Image not found' });
       
-      // Eliminar imagen de Cloudinary si existe publicId
-      if (image.publicId) {
-        try {
-          const result = await cloudinary.uploader.destroy(image.publicId);
-          console.log('Cloudinary delete result:', result);
-        } catch (cloudError) {
-          console.error("Cloudinary delete error:", cloudError);
-          // Continuar con el proceso aunque falle la eliminación en Cloudinary
-        }
+      // Get filenames from URLs
+      const filename = path.basename(image.url);
+      const thumbnailFilename = path.basename(image.thumbnailUrl);
+      
+      // Delete files from filesystem
+      try {
+        await fs.unlink(path.join(IMAGES_DIR, filename));
+        await fs.unlink(path.join(THUMBNAILS_DIR, thumbnailFilename));
+      } catch (fsError) {
+        console.error("File deletion error:", fsError);
+        // Continue with database deletion even if file deletion fails
       }
       
-      // Eliminar de la base de datos
+      // Delete from database
       await image.destroy();
       
       res.json({ message: 'Image deleted successfully' });
