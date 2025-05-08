@@ -6,17 +6,55 @@ const Image = sequelize.define('Image', {
     type: DataTypes.STRING,
     allowNull: false
   },
-  description: DataTypes.TEXT,
+  description: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
   filename: {
     type: DataTypes.STRING,
-    unique: true
+    allowNull: false
   },
-  url: DataTypes.STRING,
-  thumbnailUrl: DataTypes.STRING,
-  tags: DataTypes.JSON,
-  size: DataTypes.INTEGER,
-  width: DataTypes.INTEGER,
-  height: DataTypes.INTEGER
+  url: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  thumbnailUrl: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  cloudinary_id: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  publicId: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  tags: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    defaultValue: []
+  },
+  size: {
+    type: DataTypes.INTEGER,
+    allowNull: true
+  },
+  width: {
+    type: DataTypes.INTEGER,
+    allowNull: true
+  },
+  height: {
+    type: DataTypes.INTEGER,
+    allowNull: true
+  },
+  userId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'Users',
+      key: 'id'
+    }
+  }
 }, {
   timestamps: true
 });
